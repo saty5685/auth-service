@@ -3,6 +3,8 @@ package com.deezyWallet.auth_service.utils;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -14,6 +16,7 @@ import com.deezyWallet.auth_service.exceptions.AuthServiceException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+	Logger logger= LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
 	@ExceptionHandler(AuthServiceException.class)
 	public ResponseEntity<ErrorDetail> handleAuthServiceException(AuthServiceException ex) {
@@ -30,11 +33,18 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(MethodArgumentNotValidException.class)
 	public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
 		Map<String, String> errors = new HashMap<>();
-
+		logger.info(ex.getMessage(), ex);
 		ex.getBindingResult().getFieldErrors().forEach(error ->
 				errors.put(error.getField(), error.getDefaultMessage())
 		);
 
 		return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(RuntimeException.class)
+	public ResponseEntity<ErrorDetail> handleGeneralExceptions(RuntimeException ex) {
+		ErrorDetail err=new ErrorDetail("500", ex.getMessage());
+		logger.info(ex.getMessage(), ex);
+		return new ResponseEntity<>(err, HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 }

@@ -1,5 +1,6 @@
 package com.deezyWallet.auth_service;
 
+import org.apache.catalina.startup.Tomcat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
@@ -14,6 +15,7 @@ public class AuthServiceApplication {
 	public static void main(String[] args) {
 		validateErrorCodeEnum();
 		SpringApplication.run(AuthServiceApplication.class, args);
+		Tomcat tomcat=new Tomcat();
 	}
 
 	private static void validateErrorCodeEnum() {
