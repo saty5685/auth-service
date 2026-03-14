@@ -21,10 +21,14 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(AuthServiceException.class)
 	public ResponseEntity<ErrorDetail> handleAuthServiceException(AuthServiceException ex) {
 		ErrorDetail err=new ErrorDetail(ex.getError().getErrorCode(), ex.getError().getErrorDescription());
+		if(ex.getFieldErrors()!=null && !ex.getFieldErrors().isEmpty()){
+			err.setErrors(ex.getFieldErrors());
+		}
 		HttpStatus status = switch (ex.getError()) {
 			case USER_NOT_FOUND -> HttpStatus.NOT_FOUND;
 			case INVALID_CREDENTIALS -> HttpStatus.UNAUTHORIZED;
 			case ACCOUNT_LOCKED -> HttpStatus.LOCKED;
+			case BAD_REQUEST -> HttpStatus.BAD_REQUEST;
 			default -> HttpStatus.BAD_REQUEST;
 		};
 		return new ResponseEntity<>(err, status);

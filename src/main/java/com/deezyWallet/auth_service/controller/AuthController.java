@@ -45,6 +45,7 @@ public class AuthController {
 
 	@PostMapping("/register")
 	public ResponseEntity<String> registerUser(@Valid @RequestBody UserRegistrationRequestDTO requestDTO){
+		userService.validateRequest(requestDTO);
 		User savedUser=userService.registerUser(requestDTO);
 		URI location = ServletUriComponentsBuilder
 				.fromCurrentRequest()
