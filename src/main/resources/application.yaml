@@ -1,18 +1,73 @@
 spring:
   application:
     name: AUTH-SERVICE
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
   datasource:
-    url: jdbc:mysql://localhost:3306/dw_authservice?useSSL=false&serverTimezone=UTC
+    url: jdbc:mysql://localhost:3306/user_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
     username: root
     password:
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: UserServicePool-Local
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+      idle-timeout: 300000
+      max-lifetime: 900000
+
   jpa:
+    open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
+    baseline-on-migrate: false
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: user-service-local
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        spring.json.add.type.headers: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+          max-wait: 1000ms
+
+    jpa:
+      repositories:
+        bootstrap-mode: default
 
 
   cloud:
@@ -21,9 +76,56 @@ spring:
 
 server:
   port: 8083
+  servlet:
+    context-path: /
+    compression:
+      enabled: true
+      mime-types: application/json
+      min-response-size: 1024
 
 eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+jwt:
+  access-expiry-ms: 900000
+  refresh-expiry-ms: 604800000
+  issuer: digital-wallet-platform
+  secret: bG9jYWwtZGV2LXNlY3JldC1mb3ItdXNlci1zZXJ2aWNlLW9ubHktbm90LXByb2R1Y3Rpb24tNjRieXRlc21pbg==
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+
+spring.task.execution:
+  pool:
+    core-size: 4
+    max-size: 8
+    queue-capacity: 100
+    keep-alive: 60s
+  thread-name-prefix: audit-async-
+
+logging:
+  level:
+    root: INFO
+    com.deezyWallet.auth_service.user: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
+    org.flywaydb: INFO
+
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%-5level){highlight} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n"
 

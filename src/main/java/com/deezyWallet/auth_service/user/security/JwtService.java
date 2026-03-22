@@ -1,8 +1,18 @@
 package com.deezyWallet.auth_service.user.security;
 
+import java.util.Date;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import javax.crypto.SecretKey;
+
+import org.springframework.stereotype.Service;
+
 import com.deezyWallet.auth_service.user.config.JwtProperties;
 import com.deezyWallet.auth_service.user.constants.UserConstants;
 import com.deezyWallet.auth_service.user.entity.User;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -11,13 +21,6 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-
-import javax.crypto.SecretKey;
-import java.util.Date;
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * JWT issuer and validator — owned exclusively by User & Identity Service.
@@ -146,6 +149,14 @@ public class JwtService {
 		long expiryMs = claims.getExpiration().getTime();
 		long nowMs    = System.currentTimeMillis();
 		return Math.max(0, (expiryMs - nowMs) / 1000);
+	}
+
+	/**
+	 * Returns the refresh token lifetime in seconds.
+	 * Used by AuthService when setting RefreshToken.expiresAt.
+	 */
+	public long getRefreshExpirySeconds() {
+		return jwtProperties.getRefreshExpiryMs() / 1000;
 	}
 }
  

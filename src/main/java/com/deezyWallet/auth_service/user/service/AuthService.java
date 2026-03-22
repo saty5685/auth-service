@@ -1,8 +1,25 @@
 package com.deezyWallet.auth_service.user.service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.util.HexFormat;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.deezyWallet.auth_service.user.constants.UserConstants;
 import com.deezyWallet.auth_service.user.constants.UserErrorCode;
-import com.deezyWallet.auth_service.user.dto.request.*;
+import com.deezyWallet.auth_service.user.dto.request.LoginRequest;
+import com.deezyWallet.auth_service.user.dto.request.OtpVerifyRequest;
+import com.deezyWallet.auth_service.user.dto.request.RegisterRequest;
+import com.deezyWallet.auth_service.user.dto.request.TokenRefreshRequest;
 import com.deezyWallet.auth_service.user.dto.response.AuthResponse;
 import com.deezyWallet.auth_service.user.dto.response.TokenRefreshResponse;
 import com.deezyWallet.auth_service.user.dto.response.UserProfileResponse;
@@ -14,27 +31,22 @@ import com.deezyWallet.auth_service.user.enums.KycStatus;
 import com.deezyWallet.auth_service.user.enums.OtpPurpose;
 import com.deezyWallet.auth_service.user.enums.UserStatus;
 import com.deezyWallet.auth_service.user.event.UserEventPublisher;
-import com.deezyWallet.auth_service.user.exception.*;
+import com.deezyWallet.auth_service.user.exception.AccountLockedException;
+import com.deezyWallet.auth_service.user.exception.AccountStatusException;
+import com.deezyWallet.auth_service.user.exception.AuthException;
+import com.deezyWallet.auth_service.user.exception.TokenException;
+import com.deezyWallet.auth_service.user.exception.UserAlreadyExistsException;
+import com.deezyWallet.auth_service.user.exception.UserNotFoundException;
 import com.deezyWallet.auth_service.user.mapper.UserMapper;
 import com.deezyWallet.auth_service.user.repository.RefreshTokenRepository;
 import com.deezyWallet.auth_service.user.repository.RoleRepository;
 import com.deezyWallet.auth_service.user.repository.UserRepository;
 import com.deezyWallet.auth_service.user.security.JwtService;
+
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.time.LocalDateTime;
-import java.util.HexFormat;
-import java.util.Set;
-import java.util.UUID;
 
 /**
  * AuthService — core authentication orchestrator.
@@ -91,6 +103,7 @@ public class AuthService {
 	private final AuditService          auditService;
 	private final UserEventPublisher    eventPublisher;
 	private final UserMapper            userMapper;
+	private final RedisTemplate<String, String> redisTemplate;
 
 	// ── REGISTER ──────────────────────────────────────────────────────────────
 
@@ -146,6 +159,8 @@ public class AuthService {
 				.status(UserStatus.PENDING)
 				.kycStatus(KycStatus.UNVERIFIED)
 				.roles(Set.of(userRole))
+				.createdAt(LocalDateTime.now())
+				.updatedAt(LocalDateTime.now())
 				.build();
 
 		userRepository.save(user);
@@ -230,6 +245,7 @@ public class AuthService {
 	 *   This prevents user enumeration attacks where an attacker discovers
 	 *   which emails are registered by seeing different error messages.
 	 */
+	@Transactional
 	public AuthResponse login(LoginRequest req, String ipAddress) {
 		// Step 1: Find user (generic error if not found)
 		User user = userRepository.findByEmail(req.getEmail().toLowerCase().trim())
@@ -286,6 +302,7 @@ public class AuthService {
 	 *   that the password was correct (the MFA challenge itself is the
 	 *   proof that the password succeeded).
 	 */
+	@Transactional
 	public AuthResponse verifyMfaLogin(OtpVerifyRequest req, String ipAddress) {
 		// Validate MFA pending state — prevents MFA bypass on non-pending users
 		if (!isMfaPending(req.getUserId())) {
@@ -445,6 +462,7 @@ public class AuthService {
 				.ipAddress(ipAddress)
 				.expiresAt(LocalDateTime.now().plusSeconds(
 						jwtService.getRefreshExpirySeconds()))
+				.createdAt(LocalDateTime.now())
 				.build();
 		refreshTokenRepository.save(refreshRecord);
 
@@ -487,18 +505,19 @@ public class AuthService {
 	}
 
 	private void storeMfaPendingState(String userId) {
-		// Simple flag — presence of key = MFA is pending for this userId
-		// The actual TOTP verification uses the secret on the User entity
+		String key = UserConstants.REDIS_MFA_PENDING_PREFIX + userId;
+		redisTemplate.opsForValue().set(key, userId,
+				UserConstants.MFA_PENDING_TTL_SECONDS, TimeUnit.SECONDS);
 	}
 
 	private boolean isMfaPending(String userId) {
-		// In a full implementation, check Redis for the MFA pending flag
-		// For now, trust the userId from the request (validated by User entity lookup)
-		return true;
+		String key = UserConstants.REDIS_MFA_PENDING_PREFIX + userId;
+		return Boolean.TRUE.equals(redisTemplate.hasKey(key));
 	}
 
 	private void clearMfaPendingState(String userId) {
-		// Delete MFA pending flag from Redis
+		String key = UserConstants.REDIS_MFA_PENDING_PREFIX + userId;
+		redisTemplate.delete(key);
 	}
 
 	/**

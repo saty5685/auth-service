@@ -1,6 +1,11 @@
 package com.deezyWallet.auth_service.user.service;
 
-import com.deezyWallet.auth_service.user.constants.UserConstants;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.deezyWallet.auth_service.user.constants.UserErrorCode;
 import com.deezyWallet.auth_service.user.dto.request.ChangePasswordRequest;
 import com.deezyWallet.auth_service.user.dto.request.MfaConfirmRequest;
@@ -12,18 +17,17 @@ import com.deezyWallet.auth_service.user.entity.User;
 import com.deezyWallet.auth_service.user.enums.AuditAction;
 import com.deezyWallet.auth_service.user.enums.UserStatus;
 import com.deezyWallet.auth_service.user.event.UserEventPublisher;
-import com.deezyWallet.auth_service.user.exception.*;
+import com.deezyWallet.auth_service.user.exception.AccountStatusException;
+import com.deezyWallet.auth_service.user.exception.AuthException;
+import com.deezyWallet.auth_service.user.exception.MfaException;
+import com.deezyWallet.auth_service.user.exception.UserNotFoundException;
 import com.deezyWallet.auth_service.user.mapper.UserMapper;
 import com.deezyWallet.auth_service.user.repository.RefreshTokenRepository;
 import com.deezyWallet.auth_service.user.repository.UserRepository;
 import com.deezyWallet.auth_service.user.security.JwtService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * UserService — user profile and account lifecycle management.
@@ -80,6 +84,28 @@ public class UserService {
 				.orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
 		return userMapper.toStatusResponse(user);
 	}
+
+
+     /* Status lookup by email — for internal services that only know the email.
+     * Returns the same minimal status response as getStatus(userId).
+     *
+     * WHY not return full profile?
+     *   Same principle of least information — callers need canTransact, not PII.
+     *
+     * WHY not add findByEmail to the existing getStatus method?
+     *   Different lookup key — keeping methods separate avoids an overloaded
+     *   method that either accepts userId or email with a flag parameter.
+     *   Clean, single-purpose methods are easier to test and mock.
+      */
+
+    @Transactional(readOnly = true)
+    public UserStatusResponse getStatusByEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UserNotFoundException("User not found for email"));
+        // NOTE: We intentionally do NOT echo back the email in the response —
+        // UserStatusResponse contains only userId, status, kycStatus, canTransact, loginLocked.
+        return userMapper.toStatusResponse(user);
+    }
 
 	// ── Profile update ────────────────────────────────────────────────────────
 

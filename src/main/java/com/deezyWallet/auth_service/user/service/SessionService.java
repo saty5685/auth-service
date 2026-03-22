@@ -1,12 +1,18 @@
 package com.deezyWallet.auth_service.user.service;
 
-import com.deezyWallet.auth_service.user.constants.UserConstants;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.concurrent.TimeUnit;
+
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.TimeUnit;
+import com.deezyWallet.auth_service.user.config.JwtProperties;
+import com.deezyWallet.auth_service.user.constants.UserConstants;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Redis-backed session management for active login sessions.
@@ -48,9 +54,12 @@ import java.util.concurrent.TimeUnit;
 public class SessionService {
 
 	private final RedisTemplate<String, String> redisTemplate;
+	private final JwtProperties jwtProperties;
 
-	/** Refresh token lifetime in seconds — must match JwtProperties.refreshExpiryMs / 1000 */
-	private static final long SESSION_TTL_SECONDS = 604_800L; // 7 days
+	/** Derives session TTL from JwtProperties.refreshExpiryMs to stay in sync. */
+	private long sessionTtlSeconds() {
+		return jwtProperties.getRefreshExpiryMs() / 1000;
+	}
 
 	// ── Public API ────────────────────────────────────────────────────────────
 
@@ -65,7 +74,7 @@ public class SessionService {
 		try {
 			String key   = sessionKey(sessionId);
 			String value = userId + "|" + (ipAddress != null ? ipAddress : "unknown");
-			redisTemplate.opsForValue().set(key, value, SESSION_TTL_SECONDS, TimeUnit.SECONDS);
+			redisTemplate.opsForValue().set(key, value, sessionTtlSeconds(), TimeUnit.SECONDS);
 			log.debug("Session saved for userId={} sessionId={}", userId, sessionId);
 		} catch (Exception e) {
 			// Non-fatal — DB refresh token is the authoritative record
@@ -117,12 +126,12 @@ public class SessionService {
 	public void deleteAllSessionsForUser(String userId) {
 		try {
 			// Scan all session keys, delete those belonging to this user
-			redisTemplate.execute((connection) -> {
-				var cursor = connection.keyCommands()
-						.scan(org.springframework.data.redis.core.ScanOptions.scanOptions()
-								.match(UserConstants.REDIS_SESSION_PREFIX + "*")
-								.count(100)
-								.build());
+			redisTemplate.execute((RedisCallback<Void>) connection -> {
+				ScanOptions options = ScanOptions.scanOptions()
+						.match(UserConstants.REDIS_SESSION_PREFIX + "*")
+						.count(100)
+						.build();
+				Cursor<byte[]> cursor = connection.scan(options);
 				while (cursor.hasNext()) {
 					byte[] keyBytes = cursor.next();
 					String key   = new String(keyBytes);
