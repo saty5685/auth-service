@@ -91,6 +91,7 @@ eureka:
 jwt:
   access-expiry-ms: 900000
   refresh-expiry-ms: 604800000
+  service-expiry-ms: 86400000   # 24 hours — inter-service token lifetime
   issuer: digital-wallet-platform
   secret: bG9jYWwtZGV2LXNlY3JldC1mb3ItdXNlci1zZXJ2aWNlLW9ubHktbm90LXByb2R1Y3Rpb24tNjRieXRlc21pbg==
 

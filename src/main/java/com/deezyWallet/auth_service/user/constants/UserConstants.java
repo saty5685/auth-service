@@ -90,7 +90,7 @@ public final class UserConstants {
 	// ── MFA ───────────────────────────────────────────────────────────────────
 	/** TOTP window tolerance — how many 30s windows to accept (1 = ±30s) */
 	public static final int    TOTP_WINDOW              = 1;
-	public static final String TOTP_ISSUER              = "DigitalWallet";
+	public static final String TOTP_ISSUER              = "DeezyWallet";
 	/** MFA pending state TTL — user has this long to complete MFA after password */
 	public static final int    MFA_PENDING_TTL_SECONDS  = 300; // 5 minutes
 }

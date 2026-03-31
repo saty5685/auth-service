@@ -94,6 +94,43 @@ public class JwtService {
 	}
 
 	/**
+	 * Issues a service-to-service JWT for inter-service communication.
+	 *
+	 * NOT a user token — no email, phone, kycStatus, or DB lookup.
+	 * The "sub" claim is the calling service's name (e.g. "transaction-service").
+	 * The roles claim contains only ROLE_INTERNAL_SERVICE.
+	 *
+	 * WHY a separate method instead of a fake User entity?
+	 *   Service tokens have a fundamentally different lifecycle:
+	 *   - No refresh token (services regenerate on expiry)
+	 *   - No jti blacklisting (services don't "log out")
+	 *   - Longer expiry (24h vs 15min for user tokens)
+	 *   - No PII claims (email, phone)
+	 *   Mixing these into generateAccessToken() would require null checks
+	 *   on every claim and violate Single Responsibility.
+	 *
+	 * SECURITY: These tokens are never issued to external clients.
+	 *   They are generated internally by each service at startup using
+	 *   the shared HMAC secret. The ROLE_INTERNAL_SERVICE role gates
+	 *   access to /internal/** endpoints exclusively.
+	 *
+	 * @param serviceName identity of the calling service (becomes JWT "sub")
+	 */
+	public String generateServiceToken(String serviceName) {
+		return Jwts.builder()
+				.subject(serviceName)
+				.issuer(jwtProperties.getIssuer())
+				.claim(UserConstants.JWT_CLAIM_ROLES,
+						List.of(UserConstants.ROLE_INTERNAL_SERVICE))
+				.id(UUID.randomUUID().toString())
+				.issuedAt(new Date())
+				.expiration(new Date(System.currentTimeMillis()
+						+ jwtProperties.getServiceExpiryMs()))
+				.signWith(signingKey(), SignatureAlgorithm.HS512)
+				.compact();
+	}
+
+	/**
 	 * Generates a cryptographically random refresh token (plain UUID, not a JWT).
 	 * The caller is responsible for hashing and persisting it.
 	 */

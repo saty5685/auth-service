@@ -32,6 +32,9 @@ public class JwtProperties {
 	/** Refresh token lifetime in milliseconds. Default: 604_800_000 (7 days) */
 	private long refreshExpiryMs = 604_800_000L;
 
+	/** Service-to-service token lifetime in milliseconds. Default: 86_400_000 (24 hours) */
+	private long serviceExpiryMs = 86_400_000L;
+
 	/** Token issuer claim — must match across all services for validation */
 	private String issuer = "digital-wallet-platform";
 }
